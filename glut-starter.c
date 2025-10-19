@@ -18,12 +18,16 @@
 #include <GL/gl.h>
 #include <GL/glu.h>
 #include <GL/freeglut.h>   // Consider using freeglut.h instead, if available.
+#include <GL/glext.h>
+#include <GL/glcorearb.h>
 #include <stdio.h>     // (Used only for some information messages to standard out.)
 #include <stdlib.h>    // (Used only for exit() function.)
+#include <math.h>
 #include <jpeglib.h>
 #include <jerror.h>
 
 #define DEBUG 1
+#define ARC_INDICES 37
 
 struct imgRawImage {
     unsigned int numComponents;
@@ -36,11 +40,11 @@ struct imgRawImage {
 int width, height;   // Size of the drawing area, to be set in reshape().
 
 int frameNumber = 0;     // For use in animation.
-int roll = 90;
+int roll = 0;
 int pitch = 0;
 
 GLuint texture[2];
-GLuint vertices[1];
+GLfloat vertices[ARC_INDICES][2];
 
 
 struct imgRawImage* loadJpegImageFile(char* lpFilename) {
@@ -119,24 +123,7 @@ struct imgRawImage* loadJpegImageFile(char* lpFilename) {
 
     return lpNewImage;
 }
-/*
-void LoadGJVertices() {
-    float vertice0[] = {
-        -0.8f, 0.0f, 0.0f,
-        -0.15f, 0.0f, 0.0f,
-        -0.1f, 0.1f, 0.0f,
-        0.1f, 0.1f, 0.0f,
-        0.15f, 0.0f, 0.0f,
-        0.8f, 0.0f, 0.0f
-    };
 
-    //glGenBuffers(1, &vertices[0]);
-    glGenVertexArrays(1, &vertices[0]);
-    //glBindBuffer(GL_ARRAY_BUFFER, vertices[0]);
-    glBindVertexArray(vertices[0]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertice0), vertice0, GL_STATIC_DRAW);
-}
-*/
 void LoadGLTextures() {
     struct imgRawImage *image, *image2;
 
@@ -213,11 +200,16 @@ void initGL() {
     GLfloat colorLightGray[] = { 0.75, 0.75, 0.75, 1.0 };
     glLightfv(GL_LIGHT0, GL_AMBIENT, colorDarkGray);
     glLightfv(GL_LIGHT0, GL_DIFFUSE, colorLightGray);
-    //glLightfv(GL_LIGHT0, GL_DIFFUSE, colorWhite);
     glLightfv(GL_LIGHT0, GL_SPECULAR, colorWhite);
 
     LoadGLTextures();
 
+    // Generate arc vertices
+    for (int i = 0; i < ARC_INDICES; i++) {
+        double rad = (i / (double)(ARC_INDICES - 1)) * M_PI;
+        vertices[i][0] = cos(rad) * -0.25f;
+        vertices[i][1] = sin(rad) * -0.25f;
+    }
 
 }  // end initGL()
 
@@ -264,16 +256,13 @@ void display() {
     glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
 
     // TODO: INSERT DRAWING CODE HERE
-    glPushMatrix();
 
     glPushMatrix();
-    //setlight();
-    setmaterial();
     glBindTexture(GL_TEXTURE_2D, texture[0]);
     glTranslatef(0.0f, 0.0f, 0.0f);
-    glRotatef(90, 0.0f, 1.0f, 0.0f);
-    glRotatef(pitch, 0.0f, 0.0f, 1.0f);
-    glRotatef(roll, 0.0f, 0.0f, 1.0f);
+    glRotatef(roll + 90, 0.0f, 0.0f, 1.0f);
+    glRotatef(pitch, 0.0f, 1.0f, 0.0f);
+    glRotatef(90, 1.0f, 0.0f, 0.0f);
     GLUquadric *sphere = gluNewQuadric();
     gluQuadricDrawStyle(sphere, GLU_FILL);
     gluQuadricNormals(sphere, GLU_SMOOTH);
@@ -283,8 +272,6 @@ void display() {
     glPopMatrix();
 
     glPushMatrix();
-    //setlight();
-    setmaterial();
     glBindTexture(GL_TEXTURE_2D, texture[1]);
     glTranslatef(0.0f, 0.0f, -0.7f);
     glRotatef(roll, 0.0f, 0.0f, 1.0f);
@@ -295,11 +282,6 @@ void display() {
     gluDisk(ring, 0.8f, 1.0f, 72, 10);
     gluDeleteQuadric(ring);
     glPopMatrix();
-
-    //glRotatef(roll, 0.0f, 0.0f, 1.0f);
-    //glBegin(GL_POINTS);
-    //glEnd();
-    //glPopMatrix();
 
     glPushMatrix();
     glDisable(GL_TEXTURE_2D);
@@ -313,6 +295,19 @@ void display() {
     glVertex3f(0.1f, 0.1f, 0.0f);
     glVertex3f(0.15f, 0.0f, 0.0f);
     glVertex3f(0.8f, 0.0f, 0.0f);
+    glEnd();
+    glBegin(GL_LINE_STRIP);
+    glColor3f(1.0f, 1.0f, 1.0f);
+    for (int i = 0; i < ARC_INDICES; i++) {
+        glVertex3f(vertices[i][0], vertices[i][1], 0.0f);
+    }
+    glEnd();
+    glBegin(GL_LINE_STRIP);
+    glColor3f(1.0f, 1.0f, 1.0f);
+    glVertex3f(0.0f, 0.1f, 0.0f);
+    glVertex3f(0.0f, 0.8f, 0.0f);
+    glVertex3f(0.3f, 0.2f, 0.0f);
+    glVertex3f(0.0f, 0.2f, 0.0f);
     glEnd();
     glEnable(GL_TEXTURE_2D);
     glPopMatrix();

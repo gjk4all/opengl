@@ -1,4 +1,4 @@
-LIBRARIES := -lGL -lGLU -lglut -ljpeg
+LIBRARIES := -lm -lGL -lGLU -lglut -ljpeg
 
 .PHONY: all clean
 
