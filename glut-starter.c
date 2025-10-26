@@ -23,10 +23,11 @@
 #include <stdio.h>     // (Used only for some information messages to standard out.)
 #include <stdlib.h>    // (Used only for exit() function.)
 #include <math.h>
+#include <glob.h>
 #include <jpeglib.h>
 #include <jerror.h>
 
-#define DEBUG 1
+//#define DEBUG 1
 #define ARC_INDICES 37
 
 struct imgRawImage {
@@ -65,9 +66,7 @@ struct imgRawImage* loadJpegImageFile(char* lpFilename) {
 
     fHandle = fopen(lpFilename, "rb");
     if(fHandle == NULL) {
-        #ifdef DEBUG
-            fprintf(stderr, "%s:%u: Failed to read file %s\n", __FILE__, __LINE__, lpFilename);
-        #endif
+        fprintf(stderr, "%s:%u: Failed to read file %s\n", __FILE__, __LINE__, lpFilename);
         return NULL; /* ToDo */
     }
 
@@ -93,16 +92,12 @@ struct imgRawImage* loadJpegImageFile(char* lpFilename) {
 
     dwBufferBytes = imgWidth * imgHeight * 3; /* We only read RGB, not A */
     if ((lpData = (unsigned char*)malloc(sizeof(unsigned char)*dwBufferBytes)) == NULL) {
-        #ifdef DEBUG
         fprintf(stderr, "%s:%u: Allocation of lpData failed\n", __FILE__, __LINE__);
-        #endif
         return NULL;
     }
 
     if ((lpNewImage = (struct imgRawImage*)malloc(sizeof(struct imgRawImage))) == NULL) {
-        #ifdef DEBUG
         fprintf(stderr, "%s:%u: Allocation of lpNewImage failed\n", __FILE__, __LINE__);
-        #endif
         return NULL;
     }
 
@@ -329,7 +324,9 @@ void reshape(int w, int h) {
     height = h;
     glViewport(0,0,width,height);  // If you have a reshape function, you MUST call glViewport!
     // TODO: INSERT ANY OTHER CODE TO ACCOUNT FOR WINDOW SIZE (maybe set projection here).
+#ifdef DEBUG
     printf("Reshaped to width %d, height %d\n", width, height);
+#endif
 }
 
 
@@ -347,7 +344,9 @@ void updateFrame() {
       // this is called before each frame of the animation.
    // TODO: INSERT CODE TO UPDATE DATA USED IN DRAWING A FRAME
    frameNumber++;
+#ifdef DEBUG
    printf("frame number %d\n", frameNumber);
+#endif
 }
 
 void timerFunction(int timerID) {
@@ -392,7 +391,9 @@ void charTyped(unsigned char ch, int x, int y) {
             break;
     }
     glutPostRedisplay();  // Causes display() to be called.
+#ifdef DEBUG
     printf("User typed %c with ASCII code %d, mouse at (%d,%d)\n", ch, ch, x, y);
+#endif
 }
 
 
@@ -429,7 +430,9 @@ void specialKeyPressed(int key, int x, int y) {
     }
     // TODO: INSERT KEY-HANDLING CODE
     glutPostRedisplay();  // Causes display() to be called.
+#ifdef DEBUG
     printf("User pressed special key with code %d; mouse at (%d,%d)\n", key, x, y);
+#endif
 }
 
 
@@ -439,6 +442,25 @@ int dragging;        // 0 or 1 to indicate whether a drag operation is in progre
 int dragButton;      // which button started the drag operation
 int startX, startY;  // mouse position at start of drag
 int prevX, prevY;    // previous mouse position during drag
+int brightness = 100;
+glob_t globbuf;
+
+void updateBrightness() {
+    char **found;
+
+    if (globbuf.gl_pathc == 0)
+        return;
+
+#ifdef DEBUG
+    fprintf(stderr, "Found %d\n", globbuf.gl_pathc);
+#endif
+    found = globbuf.gl_pathv;
+
+    FILE *fptr;
+    fptr = fopen(*found, "w");
+    fprintf(fptr, "%d\n", brightness);
+    fclose(fptr);
+}
 
 /*  mouseUpDown() is set up in main() to be called when the user presses or releases
  *  a mutton ont he mouse.  The button paramter is one of the contants GLUT_LEFT_BUTTON,
@@ -456,14 +478,18 @@ void mouseUpOrDown(int button, int buttonState, int x, int y) {
        dragButton = button;
        startX = prevX = x;
        startY = prevY = y;
+#ifdef DEBUG
        printf("Mouse button %d down at (%d,%d)\n", button, x, y);
+#endif
    }
    else {  // a mouse button was released
        if ( ! dragging || button != dragButton )
            return; // this mouse release does not end a drag operation.
        dragging = 0;
        // TODO:  INSERT CODE TO CLEAN UP AFTER THE DRAG (generally not needed)
+#ifdef DEBUG
        printf("Mouse button %d up at (%d,%d)\n", button, x, y);
+#endif
    }
 }
 
@@ -476,9 +502,17 @@ void mouseDragged(int x, int y) {
     if ( ! dragging )
         return;  // This is not part of a drag that we want to respond to.
     // TODO:  INSERT CODE TO RESPOND TO NEW MOUSE POSITION
+    brightness -= (y - prevY);
+    if (brightness > 255)
+        brightness = 255;
+    if (brightness < 0)
+        brightness = 0;
+    updateBrightness();
     prevX = x;
     prevY = y;
+#ifdef DEBUG
     printf("Mouse dragged to (%d,%d)\n", x, y);
+#endif
 }
 
 
@@ -516,7 +550,8 @@ int main(int argc, char** argv) {
     glutInit(&argc, argv); // Allows processing of certain GLUT command line options
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_DEPTH);  // Usually, omit GLUT_DEPTH for 2D drawing!
     glutInitWindowSize(720,720);        // size of display area, in pixels
-    glutInitWindowPosition(100,100);    // location in window coordinates
+    
+    glutInitWindowPosition(0,0);        // location in window coordinates
     glutCreateWindow("OpenGL Program"); // parameter is window title  
     glutDisplayFunc(display);           // call display() when the window needs to be redrawn
     glutReshapeFunc(reshape);           // call reshape() when the size of the window changes
@@ -533,10 +568,20 @@ int main(int argc, char** argv) {
     createMenu();
 
     initGL();
+    globbuf.gl_offs = 3;
+    int result = glob("/sys/class/backlight/*/brightness", GLOB_ERR, NULL, &globbuf);
+    if (result == GLOB_NOMATCH)
+        fprintf(stderr, "glob error: No match!\n");
+    else if (result == GLOB_NOSPACE)
+        fprintf(stderr, "glog error: No space!\n");
+    else if (result == GLOB_ABORTED)
+        fprintf(stderr, "glob error: Aborted!\n");
+    updateBrightness();
 
     /* TODO: Uncomment the next line to start a timer-controlled animation. */
     //startAnimation();
     
     glutMainLoop(); // Run the event loop!  This function does not return.
+    globfree(&globbuf);
     return 0;
 }
